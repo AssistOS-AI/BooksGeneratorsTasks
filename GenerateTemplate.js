@@ -70,7 +70,7 @@ module.exports = {
                              "${jsonString}"
                              
                              ** Error message given by the parser:**
-                                "${error.message}"
+                                "${error}"
                              **Output Specifications:**
                                  - Provide the corrected JSON string that is valid and parsable by a JSON parser.
                                  - Your answer should not include any code block markers (e.g., \`\`\`json).
@@ -90,13 +90,14 @@ module.exports = {
                              "${jsonString}"
                              
                              ** Error message given by the parser:**
-                                "${error.message}"
+                                "${error}"
                                 ** JSON Schema Template:**
                                 "${jsonSchema}"
                                 
                                 ${correctExample ? `** Example of a correct JSON string that adheres to the schema:**\n"${correctExample}"\n` : ""}
                              **Output Specifications:**
                                  - Provide the corrected JSON string that is valid and parsable by a JSON parser.
+                                 - In case of an array of objects input, consider reducing the number of objects such that you don't run out of output tokens, while still maintaining the structure of the array.
                                  - Your answer should not include any code block markers (e.g., \`\`\`json).
                                 - Your answer should not include additional text, information, metadata or meta-commentary
                             `;
@@ -115,7 +116,7 @@ module.exports = {
                             JSON.parse(jsonString);
                             return jsonString;
                         } catch (error) {
-                            jsonString = await phase(jsonString, error);
+                            jsonString = await phase(jsonString, error.message);
                         }
                     }
                     maxIterations--;
@@ -135,42 +136,57 @@ module.exports = {
             const createParagraphsPrompt = (generationTemplateStructure, bookData, chapterData) => {
                 return `You are a book content manager. Your task is to generate a list of paragraphs based on the user specifications, which will be part of a chapter in a book.
 
-                **Instructions**:
-                - Output your response **only** in JSON format matching the following schema:
-                ${JSON.stringify(generationTemplateStructure, null, 2)}
-                
-                - **Do not** include any text outside of the JSON output.
-                - Generate **exactly** the number of paragraphs specified in the book data (ideas per chapter).
-                - **Ignore any personal biases** toward the number of paragraphs.
-                
                 **Book Data**:
-                ${JSON.stringify(bookData, null, 2)}
+                "${JSON.stringify(bookData, null, 2)}"
                 
                 **Chapter Data**:
-                ${JSON.stringify(chapterData, null, 2)}
+                "${JSON.stringify(chapterData, null, 2)}"
                 
-                Please generate the JSON output now.`;
+                **Instructions**:
+                 - Generate **exactly** the number of paragraphs specified in the book data (ideas per chapter).
+                - **Ignore any personal biases** toward the number of paragraphs.
+                - **Do not** include any text outside of the JSON output.
+                - Output your response IMMUTABLY AND STRICTLY **only** in a JSON ARRAY STRING format matching the following schema:
+                "${generationTemplateStructure}"
+                - Under no circumstance should the response contain any meta-commentary, metadata, explications, or any other type of information other than the JSON output.
+                `
             };
-
-            const generationTemplateParagraphs = {
-                paragraphs: [
-                    {
-                        "idea": "String"
-                    }
-                ]
-            };
+            const generationTemplateParagraphs = `["paragraphIdea1","paragraphIdea2","paragraphIdea3","paragraphIdea4","paragraphIdeaN"]`
 
             const getBookChaptersSchema = async () => {
                 this.logProgress(`Generating book chapters titles... with prompt:"${bookGenerationPrompt}"`);
                 let llmResponse = await llmModule.generateText(this.spaceId, bookGenerationPrompt, this.parameters.personality)
                 llmResponse = llmResponse.message
                 this.logInfo(`Book chapters schema generated:"${llmResponse}"`);
-                const chaptersJsonString = await ensureValidJson(llmResponse, 5);
+                const chaptersOutputSchema =
+                    `chapters: [
+                    {
+                        title: "String",
+                        idea: "String",
+                    },
+                    {
+                        title: "String",
+                        idea: "String",
+                    }
+                ]`
+                const chaptersOutputExample = `
+                    chapters:[
+                        {
+                            title:"Chapter 1",
+                            idea:"This chapter is about ignoring meta-commentary and useless information"
+                       },
+                        {
+                         title:"Chapter 2",
+                         idea:"This chapter is about correct json formatting"
+                        }
+                    ]
+                `
+                const chaptersJsonString = await ensureValidJson(llmResponse, 5, chaptersOutputSchema, chaptersOutputExample);
                 return JSON.parse(chaptersJsonString);
             }
 
 
-            async function generateChapterTemplate(spaceId, prompt, bookData, documentId, chapterId, chapterIndex, chapterTitle, chapterIdea,chapterCount) {
+            async function generateChapterTemplate(spaceId, prompt, bookData, documentId, chapterId, chapterIndex, chapterTitle, chapterIdea, chapterCount) {
                 const llmModule = await this.loadModule("llm");
                 const documentModule = await this.loadModule("document");
                 const ensureValidJson = async (jsonString, maxIterations = 1, jsonSchema = null, correctExample = null) => {
@@ -241,6 +257,7 @@ module.exports = {
                              **Output Specifications:**
                                  - Provide the corrected JSON string that is valid and parsable by a JSON parser.
                                  - Your answer should not include any code block markers (e.g., \`\`\`json).
+                                 - In case of an array of objects input, consider reducing the number of objects such that you don't run out of output tokens, while still maintaining the structure of the array.
                                 - Your answer should not include additional text, information, metadata or meta-commentary
                             `;
                             }
@@ -269,13 +286,19 @@ module.exports = {
                 let llmResponse = await llmModule.generateText(spaceId, prompt, this.parameters.personality);
                 llmResponse = llmResponse.message
                 this.logInfo(`Paragraphs generated for chapter ${chapterIndex + 1}/${chapterCount}:"${llmResponse}"`);
-                const paragraphsJsonString = await ensureValidJson(llmResponse, 5);
+
+                const generationTemplateParagraphsFormat = `["paragraphIdea1","paragraphIdea2","paragraphIdea3","paragraphIdea4","paragraphIdeaN"]`
+
+                const generationTemplateParagraphsExample = `["The importance of respecting instructions","The guide to perfect JSON output"]`
+                const paragraphsJsonString = await ensureValidJson(llmResponse, 5, generationTemplateParagraphsFormat, generationTemplateParagraphsExample);
+
+
                 const paragraphsData = JSON.parse(paragraphsJsonString);
                 this.paragraphIds = [];
                 this.logProgress(`Adding paragraphs to the chapter ${chapterIndex + 1}/${chapterCount}...`);
-                for (let contor = 0; contor < paragraphsData.paragraphs.length; contor++) {
+                for (let contor = 0; contor < paragraphsData.length; contor++) {
                     const paragraphObj = {
-                        text: paragraphsData.paragraphs[contor].idea,
+                        text: paragraphsData[contor]
                     };
                     this.paragraphIds.push(await documentModule.addParagraph(spaceId, documentId, chapterId, paragraphObj));
                     this.logInfo(`Paragraph ${contor + 1} added to the chapter ${chapterIndex + 1}/${chapterCount}`);
@@ -313,7 +336,7 @@ module.exports = {
                         try {
                             this.logProgress(`Generating chapter template ${index + 1}/${chapters.length}...`);
                             /* TODO move to a different task and call it when there will be infrastructure to support it */
-                            await generateChapterTemplate.call(this, this.spaceId, paragraphsPrompt, bookData, documentId, chapterIds[index], index, chapters[index].title, chapters[index].idea,chapters.length);
+                            await generateChapterTemplate.call(this, this.spaceId, paragraphsPrompt, bookData, documentId, chapterIds[index], index, chapters[index].title, chapters[index].idea, chapters.length);
                             break;
                         } catch (e) {
                             this.logWarning(`Failed to generate chapter template: ${e.message}`);
@@ -327,7 +350,7 @@ module.exports = {
                 })());
             }
             await Promise.all(chapterPromises);
-            this.logSuccess("Finished generating book template", { finished: true});
+            this.logSuccess("Finished generating book template", {finished: true});
         } catch (error) {
             this.logError(`Error generating book template: ${error.message}`, {finished: true, error: error});
         }

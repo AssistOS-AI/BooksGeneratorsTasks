@@ -1,101 +1,7 @@
 module.exports = {
     runTask: async function () {
         try {
-            const llmModule = await this.loadModule("llm");
             const documentModule = await this.loadModule("document");
-            const ensureValidJson = async (jsonString, maxIterations = 1, jsonSchema = null, correctExample = null) => {
-                const phases = {
-                    "RemoveJsonMark": async (jsonString, error) => {
-                        if (jsonString.startsWith("```json")) {
-                            jsonString = jsonString.slice(7);
-                            if (jsonString.endsWith("```")) {
-                                jsonString = jsonString.slice(0, -3);
-                            }
-                        }
-                        return jsonString;
-                    },
-                    "RemoveOutsideJson": async (jsonString, error) => {
-                        if (jsonString.includes("```json")) {
-                            const parts = jsonString.split("```json");
-                            if (parts.length > 1) {
-                                jsonString = parts[1];
-                                jsonString = jsonString.split("```")[0];
-                            }
-                        }
-                        return jsonString;
-                    },
-                    "RemoveNewLine": async (jsonString, error) => {
-                        return jsonString.replace(/\n/g, "");
-                    },
-                    "TrimSpaces": async (jsonString, error) => {
-                        return jsonString.trim();
-                    },
-                    "LlmHelper": async (jsonString, error) => {
-                        let prompt;
-                        if (!jsonSchema) {
-                            prompt = `
-                             ** Role:**
-                               - You are a global expert in correcting an invalid JSON string to a valid JSON string that is parsable by a JSON parser
-                             ** Instructions:**
-                                - You will be provided with an invalid JSON string that needs to be corrected.
-                                - You will be provided with an error message given by the parser that will help you identify the issue in the JSON string.
-                             ** Input JSON string that needs to be corrected:**
-                             "${jsonString}"
-                             
-                             ** Error message given by the parser:**
-                                "${error.message}"
-                             **Output Specifications:**
-                                 - Provide the corrected JSON string that is valid and parsable by a JSON parser.
-                                 - Your answer should not include any code block markers (e.g., \`\`\`json).
-                                - Your answer should not include additional text, information, metadata or meta-commentary
-                            `;
-                        } else {
-                            prompt = `
-                             ** Role:**
-                               - You are a global expert in correcting an invalid JSON string to a valid JSON string that is parsable by a JSON parser
-                             ** Instructions:**
-                                - You will be provided with an invalid JSON string that needs to be corrected.
-                                - You will be provided with an error message given by the parser that will help you identify the issue in the JSON string.
-                                - You will be provided with a JSON schema that the corrected JSON string should adhere to.
-                                ${correctExample ? `- You will be provided with an example of a correct JSON string that adheres to the schema` : ""}
-                             
-                             ** Input JSON string that needs to be corrected:**
-                             "${jsonString}"
-                             
-                             ** Error message given by the parser:**
-                                "${error.message}"
-                                ** JSON Schema Template:**
-                                "${jsonSchema}"
-                                
-                                ${correctExample ? `** Example of a correct JSON string that adheres to the schema:**\n"${correctExample}"\n` : ""}
-                             **Output Specifications:**
-                                 - Provide the corrected JSON string that is valid and parsable by a JSON parser.
-                                 - Your answer should not include any code block markers (e.g., \`\`\`json).
-                                - Your answer should not include additional text, information, metadata or meta-commentary
-                            `;
-                        }
-
-                        const response = await llmModule.generateText(this.spaceId, prompt, this.parameters.personality);
-                        return response.message;
-                    }
-                };
-
-                const phaseFunctions = Object.values(phases);
-
-                while (maxIterations > 0) {
-                    for (const phase of phaseFunctions) {
-                        try {
-                            JSON.parse(jsonString);
-                            return jsonString;
-                        } catch (error) {
-                            jsonString = await phase(jsonString, error);
-                        }
-                    }
-                    maxIterations--;
-                }
-                throw new Error("Unable to ensure valid JSON after all phases.");
-            };
-
             this.logProgress(`Loading template book document: ${this.parameters.documentId}...`);
             const templateDocument = await documentModule.getDocument(this.spaceId, this.parameters.documentId);
             this.logInfo(`Template Book Document Loaded:${templateDocument.title}`);
@@ -315,6 +221,7 @@ module.exports = {
                 await documentModule.updateParagraph(this.spaceId, documentId, paragraphId, paragraphGenerated);
                 this.logInfo(`Successfully expanded paragraph ${paragraphIndex + 1}/${totalParagraphs} in chapter ${chapterIndex + 1}/${totalChapters}`);
             }
+
             async function refineBook(documentId) {
                 try {
                     const llmModule = await this.loadModule('llm');
@@ -692,7 +599,10 @@ module.exports = {
                             /* TODO move to a different task and call it when there will be infrastructure to support it */
                             await expandParagraph.call(this, documentId, chapterId, paragraphIds[index], chapterIndex, index, paragraphIds.length, templateDocument.chapters.length, bookDocument.abstract, chapterData, templateDocument.chapters[chapterIndex].paragraphs[index].text);
                         } catch (error) {
-                            await documentModule.updateParagraph(this.spaceId, documentId, paragraphIds[index], {text: `Error in expanding paragraph:${error.message}`, id: paragraphIds[index]});
+                            await documentModule.updateParagraph(this.spaceId, documentId, paragraphIds[index], {
+                                text: `Error in expanding paragraph:${error.message}`,
+                                id: paragraphIds[index]
+                            });
                             this.logWarning(`Error while expanding paragraph:${index}/${paragraphIds.length} chapter:${chapterIndex}/${templateDocument.chapters.length}. Error: ${error.message}`);
                         }
                     };
