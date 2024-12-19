@@ -156,7 +156,7 @@ module.exports = {
             const getBookChaptersSchema = async () => {
                 this.logProgress(`Generating book chapters titles... with prompt:"${bookGenerationPrompt}"`);
                 let llmResponse = await llmModule.generateText(this.spaceId, bookGenerationPrompt, this.parameters.personality)
-                this.logWarning(`Previous Error ${llmResponse},  ..${llmResponse.message}`);
+                this.logWarning(`Previous Error ${JSON.stringify(llmResponse)},  ..${llmResponse.message}`);
                 llmResponse = llmResponse.message
                 this.logInfo(`Book chapters schema generated:"${llmResponse}"`);
                 const chaptersOutputSchema =
