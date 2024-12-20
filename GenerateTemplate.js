@@ -156,7 +156,6 @@ module.exports = {
             const getBookChaptersSchema = async () => {
                 this.logProgress(`Generating book chapters titles... with prompt:"${bookGenerationPrompt}"`);
                 let llmResponse = await llmModule.generateText(this.spaceId, bookGenerationPrompt, this.parameters.personality)
-                this.logWarning(`Previous Error ${JSON.stringify(llmResponse)},  ..${llmResponse.message}`);
                 llmResponse = llmResponse.message
                 this.logInfo(`Book chapters schema generated:"${llmResponse}"`);
                 const chaptersOutputSchema =
@@ -299,7 +298,8 @@ module.exports = {
                 this.logProgress(`Adding paragraphs to the chapter ${chapterIndex + 1}/${chapterCount}...`);
                 for (let contor = 0; contor < paragraphsData.length; contor++) {
                     const paragraphObj = {
-                        text: paragraphsData[contor]
+                        text: paragraphsData[contor],
+                        commands: {}
                     };
                     this.paragraphIds.push(await documentModule.addParagraph(spaceId, documentId, chapterId, paragraphObj));
                     this.logInfo(`Paragraph ${contor + 1} added to the chapter ${chapterIndex + 1}/${chapterCount}`);
@@ -346,7 +346,7 @@ module.exports = {
                     } //fails silently
                     if (retries === 0) {
                         this.logWarning(`Failed to generate chapter template after all retries`, {chapterId: chapterIds[index]});
-                        await documentModule.addParagraph(this.parameters.spaceId, documentId, chapterIds[index], {text: "Failed to generate chapter template"});
+                        await documentModule.addParagraph(this.parameters.spaceId, documentId, chapterIds[index], {text: "Failed to generate chapter template",commands:{}});
                     }
                 })());
             }
