@@ -302,7 +302,11 @@ module.exports = {
                         commands: {}
                     };
                     this.paragraphIds.push(await documentModule.addParagraph(spaceId, documentId, chapterId, paragraphObj));
-                    this.logInfo(`Paragraph ${contor + 1} added to the chapter ${chapterIndex + 1}/${chapterCount}`);
+                    this.logInfo(`Paragraph ${contor + 1} added to the chapter ${chapterIndex + 1}/${chapterCount}`, {
+                        documentId: documentId,
+                        chapterId: chapterId,
+                        paragraphId: this.paragraphIds[contor]
+                    });
                 }
                 this.logInfo(`All paragraphs added to the chapter ${chapterIndex + 1}/${chapterCount}`);
             }
@@ -325,7 +329,10 @@ module.exports = {
             this.logProgress(`Adding chapters to the document...`);
             for (const chapter of chapters) {
                 chapterIds.push(await documentModule.addChapter(this.spaceId, documentId, chapter));
-                this.logInfo(`Chapter ${chapterIds.length - 1} added to the document`);
+                this.logInfo(`Chapter ${chapterIds.length - 1} added to the document`, {
+                    documentId: documentId,
+                    chapterId: chapterIds[chapterIds.length - 1]
+                });
             }
             this.logInfo(`All chapters added to the document`,);
             let chapterPromises = [];
@@ -346,7 +353,10 @@ module.exports = {
                     } //fails silently
                     if (retries === 0) {
                         this.logWarning(`Failed to generate chapter template after all retries`, {chapterId: chapterIds[index]});
-                        await documentModule.addParagraph(this.parameters.spaceId, documentId, chapterIds[index], {text: "Failed to generate chapter template",commands:{}});
+                        await documentModule.addParagraph(this.parameters.spaceId, documentId, chapterIds[index], {
+                            text: "Failed to generate chapter template",
+                            commands: {}
+                        });
                     }
                 })());
             }
